@@ -16,6 +16,8 @@ class Narrator:
         except ImportError:
             raise MissingDependency("PyTorch is not installed (see the install steps in the README).")
         self.torch = torch
+        self.model_name, self.device, self.threads = model_name, device, threads
+        self.dtype, self.no_miopen = dtype, no_miopen
         if threads:
             torch.set_num_threads(threads)
         try:
@@ -62,6 +64,10 @@ class Narrator:
         self._var_kw = any(p.kind == p.VAR_KEYWORD for p in sig.parameters.values())
         self.gen_kwargs = gen_kwargs or {}
 
+    def with_model(self, model_name):
+        """Another model loaded with the same engine settings (and no extra generate args)."""
+        return Narrator(model_name, self.device, self.threads, {}, self.dtype, self.no_miopen)
+
     def accepts(self, name):
         return self._var_kw or name in self._params
 
@@ -91,18 +97,17 @@ class Narrator:
             a = a.mean(axis=0 if a.shape[0] < a.shape[-1] else 1)
         return a
 
-
-def synth_chunk(narr, text, voice, seed, retries):
-    """Generate one chunk; retry with another seed if the length looks broken."""
-    best, best_err = None, None
-    for attempt in range(retries + 1):
-        a = trim_silence(narr.generate(text, seed + attempt * 1000, **voice), narr.sr)
-        dur = len(a) / narr.sr
-        if plausible(dur, text):
-            return a
-        err = abs(np.log(max(dur, 0.05) / expected_secs(text)))
-        if best is None or err < best_err:
-            best, best_err = a, err
-    log(f"    ! suspicious length after {retries + 1} tries, keeping best: {text[:60]}…",
-          flush=True)
-    return best
+    def synth_chunk(self, text, voice, seed, retries):
+        """Generate one chunk; retry with another seed if the length looks broken."""
+        best, best_err = None, None
+        for attempt in range(retries + 1):
+            a = trim_silence(self.generate(text, seed + attempt * 1000, **voice), self.sr)
+            dur = len(a) / self.sr
+            if plausible(dur, text):
+                return a
+            err = abs(np.log(max(dur, 0.05) / expected_secs(text)))
+            if best is None or err < best_err:
+                best, best_err = a, err
+        log(f"    ! suspicious length after {retries + 1} tries, keeping best: {text[:60]}…",
+              flush=True)
+        return best

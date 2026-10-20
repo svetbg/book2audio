@@ -304,15 +304,17 @@ output / modes:
 ```text
 book2audio.py          wrapper so `python book2audio.py ...` keeps working
 book2audio/
-  __main__.py          main(): the pipeline
+  __main__.py          main(): parses the options, runs Book2Audio, turns errors into exit code 1
+  app.py               Book2Audio: wires the pieces below together from the options
   args.py              command-line options
   config.py            constants (model, sample rate, pauses)
   exceptions.py        Book2AudioException and subclasses
   logging.py           log / debug / error (plain print)
-  loaders/             EPUB and TXT readers
-  text/                chunking and the lexicon
-  tts/                 OmniVoice wrapper and voice handling
-  output/              audio helpers, chapter rendering, M4B building
+  workdir.py           WorkDir: owner of every file name in the work folder
+  loaders/             Loader base, EpubLoader, TxtLoader, for_path() picks one by file type
+  text/                Lexicon (pronunciation fixes), Chunker (chapter -> speech/pause steps)
+  tts/                 Narrator (OmniVoice wrapper), SampleVoice / DesignedVoice, VoiceLibrary
+  output/              ChapterRenderer, M4bBuilder, plain audio helpers
   utils.py             small helpers
 tests/                 pytest suite
 ```

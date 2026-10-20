@@ -1,18 +1,18 @@
 import hashlib
-from types import SimpleNamespace
-
 import numpy as np
 import soundfile as sf
 
 from book2audio import Chapter
 from book2audio.output.audio import expected_secs
-from book2audio.output.render import render_chapter
+from book2audio.output.render import ChapterRenderer
+from book2audio.tts.narrator import Narrator
+from book2audio.workdir import WorkDir
 
 SR = 24000
 TEXT = "Това е един тестов абзац."
 
 
-class FakeNarrator:
+class FakeNarrator(Narrator):
     sr = SR
 
     def __init__(self):
@@ -25,9 +25,10 @@ class FakeNarrator:
 
 
 def render(tmp_path, narr, keep_chunks=True):
-    args = SimpleNamespace(seed=1, retries=0, keep_chunks=keep_chunks)
+    renderer = ChapterRenderer(narr, {}, "vk", WorkDir(tmp_path), seed=1, retries=0,
+                               keep_chunks=keep_chunks)
     plan = [("tts", TEXT)]
-    return render_chapter(narr, 1, 1, Chapter(title="T", paragraphs=[TEXT]), plan, {}, "vk", args, tmp_path)
+    return renderer.render(1, 1, Chapter(title="T", paragraphs=[TEXT]), plan)
 
 
 def test_chunk_file_named_by_md5_of_key_and_text(tmp_path):
