@@ -4,6 +4,11 @@ import sys
 import time
 from pathlib import Path
 
+if not __package__:
+    # run by path: swap the package dir for its parent on sys.path, so our logging.py
+    # does not shadow the stdlib logging module
+    sys.path[0] = str(Path(__file__).resolve().parent.parent)
+
 from book2audio.args import parse_arguments
 from book2audio.config import CHARS_PER_SEC
 from book2audio.exceptions import Book2AudioException, InputError
