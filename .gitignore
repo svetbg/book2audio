@@ -5,3 +5,6 @@ build/
 *_work/
 .venv/
 .pytest_cache/
+*.pyc
+dist/
+*.wav
