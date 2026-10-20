@@ -43,7 +43,7 @@ class Narrator:
                 last_err = e
             except OSError as e:
                 raise ModelError(f"Could not download/load '{model_name}'.\n"
-                    f"The model is gated: open https://huggingface.co/{model_name}, accept the "
+                    f"The model may be gated: open https://huggingface.co/{model_name}, accept the "
                     f"conditions, then run 'hf auth login' (or 'huggingface-cli login').\n{e}")
         if model is None:
             raise last_err

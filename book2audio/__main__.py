@@ -4,7 +4,7 @@ import sys
 import time
 from pathlib import Path
 
-if not __package__:
+if not __package__ and Path(sys.path[0]).resolve() == Path(__file__).resolve().parent:
     # run by path: swap the package dir for its parent on sys.path, so our logging.py
     # does not shadow the stdlib logging module
     sys.path[0] = str(Path(__file__).resolve().parent.parent)

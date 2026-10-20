@@ -293,7 +293,7 @@ output / modes:
 - **Garbled audio on the GPU.** Use `--dtype float32`.
 - **GPU crash or hang.** Use `--no-miopen`.
 - **`--device cuda` but "PyTorch sees no GPU".** The CPU build of PyTorch is installed, or ROCm is not set up. Check with `python -c "import torch; print(torch.version.hip, torch.cuda.is_available())"`.
-- **"Could not download/load" the model.** The model is gated: accept its conditions on the Hugging Face model page and run `hf auth login`.
+- **"Could not download/load" the model.** The model may be gated (`preslaff/omnivoice-bg` is): accept its conditions on the Hugging Face model page and run `hf auth login`.
 - **"ffmpeg not found".** Install it, e.g. `sudo apt install ffmpeg`.
 - **"PyTorch is not installed".** Install the CPU or ROCm build first, see [Installation](#installation).
 - **Unsupported format.** Only `.epub` and `.txt` (also `.text`) are read. Convert other formats first, e.g. `ebook-convert book.mobi book.epub` (Calibre).
