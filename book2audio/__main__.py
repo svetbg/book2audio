@@ -12,7 +12,7 @@ if not __package__ and Path(sys.path[0]).resolve() == Path(__file__).resolve().p
 from book2audio.args import parse_arguments
 from book2audio.config import CHARS_PER_SEC
 from book2audio.exceptions import Book2AudioException, InputError
-from book2audio.loaders import load_book
+from book2audio.loaders import for_path
 from book2audio.logging import error, log
 from book2audio.output.audio import fmt_time
 from book2audio.output.m4b import build_m4b, need_ffmpeg
@@ -38,7 +38,7 @@ def run(args):
     src = Path(args.ebook).expanduser()
     if not src.exists():
         raise InputError(f"File not found: {src}")
-    book = load_book(src, args.min_chars)
+    book = for_path(src, args.min_chars).load()
     if not book.chapters:
         raise InputError("No text found. Try a lower --min-chars.")
 

@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 from book2audio import Book, Chapter
+from book2audio.loaders.base import Loader
 from book2audio.utils import clean_text, fill_missing_titles
 
 
@@ -19,24 +20,27 @@ def read_text_file(path: Path) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
-def load_txt(path: Path, min_chars: int) -> Book:
-    text = read_text_file(path).replace("\r\n", "\n")
-    blocks = re.split(r"\n\s*\n", text)
-    if len(blocks) < 3:                     # no blank lines: one paragraph per line
-        blocks = text.split("\n")
-    chapters, cur = [], Chapter(title="")
-    for b in blocks:
-        b = clean_text(b)
-        if not b:
-            continue
-        if len(b) <= 80 and CHAPTER_LINE.match(b):
-            if cur.paragraphs:
-                chapters.append(cur)
-            cur = Chapter(title=b, paragraphs=[b])
-        else:
-            cur.paragraphs.append(b)
-    if cur.paragraphs:
-        chapters.append(cur)
-    chapters = [c for c in chapters if c.chars >= min_chars] or chapters
-    fill_missing_titles(chapters)
-    return Book(title=path.stem, author="", chapters=chapters)
+class TxtLoader(Loader):
+    suffixes = (".txt", ".text")
+
+    def load(self) -> Book:
+        text = read_text_file(self.path).replace("\r\n", "\n")
+        blocks = re.split(r"\n\s*\n", text)
+        if len(blocks) < 3:                     # no blank lines: one paragraph per line
+            blocks = text.split("\n")
+        chapters, cur = [], Chapter(title="")
+        for b in blocks:
+            b = clean_text(b)
+            if not b:
+                continue
+            if len(b) <= 80 and CHAPTER_LINE.match(b):
+                if cur.paragraphs:
+                    chapters.append(cur)
+                cur = Chapter(title=b, paragraphs=[b])
+            else:
+                cur.paragraphs.append(b)
+        if cur.paragraphs:
+            chapters.append(cur)
+        chapters = [c for c in chapters if c.chars >= self.min_chars] or chapters
+        fill_missing_titles(chapters)
+        return Book(title=self.path.stem, author="", chapters=chapters)

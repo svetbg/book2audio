@@ -1,16 +1,18 @@
 from pathlib import Path
 
-from book2audio import Book
 from book2audio.exceptions import UnsupportedFormat
-from book2audio.loaders.epub import load_epub
-from book2audio.loaders.txt import load_txt
+from book2audio.loaders.base import Loader
+from book2audio.loaders.epub import EpubLoader
+from book2audio.loaders.txt import TxtLoader
+
+LOADERS = (EpubLoader, TxtLoader)
 
 
-def load_book(path: Path, min_chars: int) -> Book:
+def for_path(path: Path, min_chars: int) -> Loader:
+    """The loader that handles this file type."""
     suffix = path.suffix.lower()
-    if suffix == ".epub":
-        return load_epub(path, min_chars)
-    if suffix in (".txt", ".text"):
-        return load_txt(path, min_chars)
+    for cls in LOADERS:
+        if suffix in cls.suffixes:
+            return cls(path, min_chars)
     raise UnsupportedFormat(f"Unsupported format '{suffix}'. Convert it to EPUB first, e.g. with Calibre:\n"
                             f"  ebook-convert \"{path}\" \"{path.with_suffix('.epub')}\"")

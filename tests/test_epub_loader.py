@@ -1,6 +1,6 @@
 from ebooklib import epub
 
-from book2audio.loaders import load_book
+from book2audio.loaders import for_path
 
 BODY = "Дълъг абзац с текст. " * 20
 
@@ -30,7 +30,7 @@ def test_metadata_toc_titles_and_title_fallback(tmp_path):
                   f"<h2>Заглавие от h2</h2><p>{BODY}</p>",   # first h1-h3
                   f"<p>Кратко начало</p><p>{BODY}</p>"],      # short first paragraph
               {1: "Първа"})
-    book = load_book(f, 100)
+    book = for_path(f, 100).load()
     assert (book.title, book.author) == ("Заглавие", "Автор")
     assert [c.title for c in book.chapters] == ["Първа", "Заглавие от h2", "Кратко начало"]
 
@@ -38,6 +38,6 @@ def test_metadata_toc_titles_and_title_fallback(tmp_path):
 def test_leaf_blocks_not_duplicated_and_min_chars(tmp_path):
     f = tmp_path / "b.epub"
     make_epub(f, [f"<div><p>{BODY}</p></div>", "<p>кратко</p>"], {})
-    book = load_book(f, 100)
+    book = for_path(f, 100).load()
     assert len(book.chapters) == 1
     assert book.chapters[0].paragraphs == [BODY.strip()]
