@@ -31,3 +31,10 @@ def test_plan_pauses():
     assert plan == [("tts", "Едно."), ("pause", PAUSE_CHUNK),
                     ("tts", "Две."), ("pause", PAUSE_PARAGRAPH),
                     ("pause", PAUSE_SCENE)]
+
+
+def test_plan_applies_the_lexicon(tmp_path):
+    f = tmp_path / "lex.txt"
+    f.write_text("кат=кота\n", encoding="utf-8")
+    plan = Chunker(250, Lexicon.from_file(str(f))).plan(Chapter("t", ["кат."]))
+    assert plan == [("tts", "кота."), ("pause", PAUSE_PARAGRAPH)]

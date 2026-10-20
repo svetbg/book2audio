@@ -1,3 +1,4 @@
+import json
 from types import SimpleNamespace
 
 import pytest
@@ -36,6 +37,21 @@ def test_book_voice_not_loaded_when_voice_given(tmp_path):
     new = voice_args(voice="female")
     WorkDir(tmp_path).load_voice_settings(new)
     assert new.seed == 1234
+
+
+def test_book_voice_not_loaded_when_narrator_given(tmp_path):
+    WorkDir(tmp_path).save_voice_settings(voice_args(seed=7))
+    new = voice_args(narrator="bob")
+    WorkDir(tmp_path).load_voice_settings(new)
+    assert new.seed == 1234
+
+
+def test_book_voice_stores_relative_ref_as_absolute(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "s.wav").write_bytes(b"x")
+    WorkDir(tmp_path / "w").save_voice_settings(voice_args(ref="s.wav"))
+    saved = json.loads((tmp_path / "w" / "voice_settings.json").read_text(encoding="utf-8"))
+    assert saved["ref"] == str(tmp_path / "s.wav")
 
 
 def test_saved_named_voice_round_trip(tmp_path, monkeypatch):

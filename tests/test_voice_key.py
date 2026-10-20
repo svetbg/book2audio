@@ -1,6 +1,5 @@
 import json
 import sys
-import types
 from types import SimpleNamespace
 
 import numpy as np
@@ -11,6 +10,7 @@ from book2audio.args import parse_arguments
 from book2audio.config import DESIGN_SENTENCE
 from book2audio.tts.voice import DesignedVoice, SampleVoice
 from book2audio.workdir import WorkDir
+from stubs import needs_ffmpeg, stub_modules
 
 
 def test_designed_key(tmp_path):
@@ -23,6 +23,7 @@ def test_designed_key(tmp_path):
     assert voice == {"ref_audio": str(wav), "ref_text": DESIGN_SENTENCE}
 
 
+@needs_ffmpeg
 def test_ref_key(tmp_path):
     src = tmp_path / "s.wav"
     sf.write(src, np.zeros(24000, dtype=np.float32), 24000)
@@ -31,33 +32,9 @@ def test_ref_key(tmp_path):
     assert voice["ref_audio"] == str(tmp_path / "reference.wav")
 
 
-def _stub_modules(monkeypatch):
-    class Ctx:
-        def __enter__(self): pass
-        def __exit__(self, *a): pass
-
-    torch = types.ModuleType("torch")
-    torch.float32 = torch.float16 = "dtype"
-    torch.set_num_threads = torch.manual_seed = lambda *a: None
-    torch.cuda = SimpleNamespace(is_available=lambda: False)
-    torch.backends = SimpleNamespace(cudnn=SimpleNamespace(enabled=True))
-    torch.inference_mode = Ctx
-
-    class Model:
-        sampling_rate = 24000
-        @classmethod
-        def from_pretrained(cls, name, **kw): return cls()
-        def generate(self, text, ref_audio=None, ref_text=None, **kw):
-            return np.sin(np.arange(int(24000 * max(len(text), 1) / 14)) * 0.05).astype(np.float32) * 0.3
-
-    omni = types.ModuleType("omnivoice")
-    omni.OmniVoice = Model
-    monkeypatch.setitem(sys.modules, "torch", torch)
-    monkeypatch.setitem(sys.modules, "omnivoice", omni)
-
-
+@needs_ffmpeg
 def test_run_writes_voice_key(tmp_path, monkeypatch):
-    _stub_modules(monkeypatch)
+    stub_modules(monkeypatch)
     book = tmp_path / "b.txt"
     book.write_text("Първо изречение тук. Второ изречение там.\n" * 3, encoding="utf-8")
     work = tmp_path / "w"
