@@ -26,7 +26,7 @@ class Narrator:
         if device != "cpu" and not torch.cuda.is_available():
             raise ModelError(f"--device {device} requested, but PyTorch sees no GPU. Is the ROCm build of "
                 f"PyTorch installed in this environment? Check with:\n"
-                f"  python -c \"import torch; log(torch.version.hip, torch.cuda.is_available())\"")
+                f"  python -c \"import torch; print(torch.version.hip, torch.cuda.is_available())\"")
         if no_miopen:
             torch.backends.cudnn.enabled = False   # on ROCm this switches off MIOpen
         if dtype == "auto":
