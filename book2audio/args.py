@@ -6,6 +6,7 @@ from book2audio.config import DEFAULT_MODEL
 
 def parse_arguments() -> argparse.Namespace:
     ap = argparse.ArgumentParser(
+        prog="book2audio",
         description="EPUB/TXT -> chaptered M4B audiobook with OmniVoice (Bulgarian by default).",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     ap.add_argument("-v", "--version", action="version", version=f"book2audio {__version__}")
