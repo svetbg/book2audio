@@ -1,10 +1,7 @@
 __pycache__/
-*.pyc
-.venv/
-build/
-dist/
 *.egg-info/
-.pytest_cache/
-*_work/
+build/
 *.m4b
-*.wav
+*_work/
+.venv/
+.pytest_cache/

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "book2audio"
+description = "Turn an EPUB or TXT ebook into a chaptered M4B audiobook with OmniVoice TTS"
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["audiobook", "tts", "epub", "m4b", "omnivoice"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Sound/Audio",
+]
+# PyTorch is deliberately not listed: install the CPU or ROCm build yourself first.
+dependencies = [
+    "numpy",
+    "soundfile",
+    "ebooklib",
+    "beautifulsoup4",
+    "omnivoice",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+book2audio = "book2audio.__main__:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "book2audio.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["book2audio*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
