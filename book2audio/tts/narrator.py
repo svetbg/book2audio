@@ -14,7 +14,7 @@ class Narrator:
         try:
             import torch
         except ImportError:
-            raise MissingDependency("PyTorch is not installed (see the install steps at the top of the script).")
+            raise MissingDependency("PyTorch is not installed (see the install steps in the README).")
         self.torch = torch
         if threads:
             torch.set_num_threads(threads)
