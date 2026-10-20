@@ -17,8 +17,8 @@ from book2audio.logging import error, log
 from book2audio.output.audio import fmt_time
 from book2audio.output.m4b import build_m4b, need_ffmpeg
 from book2audio.output.render import render_chapter, render_preview
-from book2audio.text.chunking import chapter_plan
-from book2audio.text.lexicon import load_lexicon
+from book2audio.text.chunking import Chunker
+from book2audio.text.lexicon import Lexicon
 from book2audio.tts.narrator import Narrator
 from book2audio.tts.voice import (load_book_voice, prepare_voice, save_book_voice,
                                   save_named_voice, use_named_voice)
@@ -67,7 +67,7 @@ def run(args):
     load_book_voice(args, workdir)
     if args.ref and args.voice:
         log("Note: --ref given, ignoring --voice.")
-    lexicon = load_lexicon(args.lexicon)
+    chunker = Chunker(args.max_chars, Lexicon.from_file(args.lexicon))
     selected = parse_chapters(args.chapters, len(book.chapters))
     if not selected:
         raise InputError("No chapters selected.")
@@ -87,7 +87,7 @@ def run(args):
 
     if args.preview:
         ch = book.chapters[selected[0] - 1]
-        render_preview(narr, ch, chapter_plan(ch, args.max_chars, lexicon), voice, args, workdir)
+        render_preview(narr, ch, chunker.plan(ch), voice, args, workdir)
         return
 
     # Chapters rendered with a different voice must not be reused
@@ -111,7 +111,7 @@ def run(args):
     started = time.time()
     for idx in selected:
         ch = book.chapters[idx - 1]
-        plan = chapter_plan(ch, args.max_chars, lexicon)
+        plan = chunker.plan(ch)
         if not any(k == "tts" for k, _ in plan):
             continue
         render_chapter(narr, idx, len(book.chapters), ch, plan, voice, voice_key, args, workdir)
@@ -124,7 +124,7 @@ def run(args):
         if f.exists():
             files.append(f)
             titles.append(ch.title)
-        elif any(k == "tts" for k, _ in chapter_plan(ch, args.max_chars, lexicon)):
+        elif any(k == "tts" for k, _ in chunker.plan(ch)):
             missing.append(idx)
     if missing:
         log(f"\nNote: {len(files)} of {len(files) + len(missing)} chapters are done and included. "
