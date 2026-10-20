@@ -4,7 +4,7 @@ Turn an EPUB or TXT ebook into a chaptered **M4B audiobook** using [OmniVoice](h
 
 What it does:
 
-- reads an `.epub` (chapters from the table of contents, cover image, title and author) or a `.txt` file (cp1251 or UTF-8, chapters found by lines such as "Глава 1" / "Chapter 1");
+- reads an `.epub` (chapters are the spine documents with at least `--min-chars` characters (the table of contents only supplies their titles), cover image, title and author) or a `.txt` file (cp1251 or UTF-8, chapters found by lines such as "Глава 1" / "Chapter 1");
 - splits every chapter into sentence-sized chunks and narrates them with OmniVoice, in the voice of a sample you supply or of a voice designed from a short description;
 - caches every chunk and chapter, so an interrupted run resumes where it stopped;
 - joins the chapters into one `.m4b` with chapter markers, cover and metadata via ffmpeg.
@@ -27,7 +27,7 @@ source .venv/bin/activate
 
 ### 1. PyTorch (first, and separately)
 
-PyTorch is intentionally **not** a dependency of this package: the right build depends on your hardware. Install one of these *before* installing book2audio.
+PyTorch is intentionally **not** a dependency of this package: the right build depends on your hardware. Install one of these *before* installing book2audio: omnivoice depends on torch, so installing book2audio first pulls the default multi-GB CUDA build from PyPI.
 
 CPU only:
 
@@ -60,9 +60,9 @@ The dependencies (numpy, soundfile, ebooklib, beautifulsoup4, omnivoice) are lis
 
 ### 3. Hugging Face access
 
-The OmniVoice models are gated. Once per machine:
+Only the Bulgarian fine-tune (`preslaff/omnivoice-bg`) is gated; `k2-fsa/OmniVoice`, used for designed voices, is not. Once per machine:
 
-1. Open the model page (<https://huggingface.co/preslaff/omnivoice-bg>, and <https://huggingface.co/k2-fsa/OmniVoice> if you use designed voices) while logged in, and accept the conditions.
+1. Open <https://huggingface.co/preslaff/omnivoice-bg> while logged in, and accept the conditions.
 2. Log in from the terminal: `hf auth login` (or `huggingface-cli login` with older versions) and paste an access token.
 
 ### Running
@@ -154,6 +154,8 @@ Re-running the same command resumes the work. In the work folder (`<output>_work
 | `designed_voice.wav` / `.json` | the designed voice and the settings it was made with |
 | `reference.wav`, `reference_full.wav` | the converted voice sample |
 | `preview.wav` | output of `--preview` |
+| `cover.jpg` / `cover.png` | the EPUB cover, extracted for the M4B |
+| `*.tmp.wav` | temporary files of a chapter or chunk being written; safe to delete after an interruption |
 | `concat.txt`, `chapters.ffmeta` | ffmpeg inputs for the final M4B |
 
 What invalidates the cache:
@@ -190,11 +192,11 @@ book2audio book.epub --ref narrator.wav --device cuda
 ## Output
 
 - A single `.m4b` (MP4 container, AAC mono, `--bitrate`, default 64k, `+faststart`).
-- One chapter marker per book chapter, titled from the EPUB table of contents (or the first heading, or "Глава N").
+- One chapter marker per book chapter, titled from the EPUB table of contents, else the first h1-h3 heading, else the first paragraph if it is at most 80 characters, else "Глава N".
 - Metadata: title and album from the book title, artist and album artist from the author, genre `Audiobook`.
 - The EPUB cover is embedded as cover art. If ffmpeg cannot embed it, the book is built without it.
 - Each chapter starts with 0.8 s and ends with 2 s of silence; pauses between chunks, paragraphs and scene breaks (`* * *`) are added automatically.
-- Sentences of suspicious length (too short or too long for their text) are regenerated with another seed, up to `--retries` times (default 2).
+- Chunks of suspicious length (too short or too long for their text) are regenerated with another seed, up to `--retries` times (default 2).
 
 ## Option reference
 
@@ -205,9 +207,8 @@ usage: book2audio [-h] [-v] [-o OUTPUT] [--ref REF] [--ref-text REF_TEXT]
                   [--ref-max-secs REF_MAX_SECS] [--voice VOICE]
                   [--design-model DESIGN_MODEL] [--narrator NAME]
                   [--save-voice NAME] [--seed SEED] [--model MODEL]
-                  [--device DEVICE]
-                  [--dtype {auto,float32,float16,bfloat16}] [--no-miopen]
-                  [--threads THREADS] [--gen-kwargs GEN_KWARGS]
+                  [--device DEVICE] [--dtype {auto,float32,float16,bfloat16}]
+                  [--no-miopen] [--threads THREADS] [--gen-kwargs GEN_KWARGS]
                   [--retries RETRIES] [--chapters CHAPTERS]
                   [--max-chars MAX_CHARS] [--min-chars MIN_CHARS]
                   [--redo-chapters SPEC] [--lexicon LEXICON]
@@ -295,7 +296,7 @@ output / modes:
 - **"Could not download/load" the model.** The model is gated: accept its conditions on the Hugging Face model page and run `hf auth login`.
 - **"ffmpeg not found".** Install it, e.g. `sudo apt install ffmpeg`.
 - **"PyTorch is not installed".** Install the CPU or ROCm build first, see [Installation](#installation).
-- **Unsupported format.** Only `.epub` and `.txt` are read. Convert other formats first, e.g. `ebook-convert book.mobi book.epub` (Calibre).
+- **Unsupported format.** Only `.epub` and `.txt` (also `.text`) are read. Convert other formats first, e.g. `ebook-convert book.mobi book.epub` (Calibre).
 - **A voice description is ignored.** Voice design needs the base model; keep the default `--design-model k2-fsa/OmniVoice`.
 
 ## Project layout
