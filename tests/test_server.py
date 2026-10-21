@@ -48,10 +48,10 @@ def free_port():
 
 def test_main_serves_the_default_models_on_the_given_host_and_port(monkeypatch, started, capsys):
     port = free_port()
-    main(monkeypatch, "--host", "127.0.0.1", "--port", str(port))
+    main(monkeypatch, "--host", "localhost", "--port", str(port))
     [(address, narrators)] = started
-    assert address == ("127.0.0.1", port) and list(narrators) == [BG, DESIGN]
-    assert f"book2audio server on http://127.0.0.1:{port} ({BG}, {DESIGN})" in capsys.readouterr().out
+    assert address == ("localhost", port) and list(narrators) == [BG, DESIGN]
+    assert f"book2audio server on http://localhost:{port} ({BG}, {DESIGN})" in capsys.readouterr().out
 
 
 def test_main_serves_only_the_models_asked_for(monkeypatch, started):

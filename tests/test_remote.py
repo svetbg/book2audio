@@ -241,3 +241,61 @@ def test_uploads_are_remembered_across_narrators(served, tmp_path):
     mtime = f.stat().st_mtime_ns
     RemoteNarrator(served[1], DESIGN).generate("a", 1, ref_audio=ref)       # a new narrator, same process
     assert f.stat().st_mtime_ns == mtime
+
+
+def wire(url, path, body, method="POST"):
+    req = urllib.request.Request(url + path, body if isinstance(body, bytes) else json.dumps(body).encode(),
+                                 method=method)
+    try:
+        with urllib.request.urlopen(req) as r:
+            return r.status, r.read()
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())["error"]
+
+
+def gen(**kw):
+    return dict(model=BG, text="a", seed=1) | kw
+
+
+def test_status_codes_on_the_wire(served, monkeypatch):
+    server, url = served
+    assert wire(url, "/generate", gen(model="evil/x"))[0] == 400
+    assert wire(url, "/generate", gen(ref="0" * 64))[0] == 404
+    assert wire(url, "/generate", {"text": "a"})[0] == 400                # missing keys
+    assert wire(url, "/generate", b"{x")[0] == 400
+    assert wire(url, "/nowhere", gen())[0] == 404
+    assert wire(url, "/info", b"", "PUT")[0] == 404
+    narr = server.narrators[BG]
+
+    def refuse(*a, **kw):
+        raise ModelError("nope")
+    monkeypatch.setattr(narr, "generate", refuse)
+    assert wire(url, "/generate", gen()) == (400, "nope")
+    monkeypatch.setattr(narr, "generate", lambda *a, **kw: 1 / 0)
+    assert wire(url, "/generate", gen()) == (500, "ZeroDivisionError: division by zero")
+
+
+def test_a_reference_must_be_a_sha256_not_a_path(served, tmp_path):
+    server, url = served
+    ref = ref_file(tmp_path)
+    sha = hashlib.sha256(ref.read_bytes()).hexdigest()
+    assert wire(url, f"/refs/{sha}", ref.read_bytes(), "PUT")[0] == 204
+    refs = Path(server.refs.name)
+    assert wire(url, "/generate", gen(ref=sha))[0] == 200
+    for ref_id in (f"../{refs.name}/{sha}", sha.upper(), f"{sha}.wav", "x"):   # these would resolve to the file above
+        assert wire(url, "/generate", gen(ref=ref_id)) == (404, "unknown ref"), ref_id
+    for name in ("not-a-sha", sha.upper(), f"{sha}.wav", f"../{refs.name}/{sha}"):
+        assert wire(url, f"/refs/{name}", ref.read_bytes(), "PUT") == (404, f"unknown path /refs/{name}")
+
+
+def test_only_a_404_triggers_the_upload_retry(served, monkeypatch, tmp_path):
+    narr, tries = RemoteNarrator(served[1], BG), []
+    monkeypatch.setattr(served[0].narrators[BG], "generate", lambda *a, **kw: tries.append(1) or 1 / 0)
+    with pytest.raises(ModelError, match="ZeroDivisionError"):
+        narr.generate("a", 1, ref_audio=str(ref_file(tmp_path)))
+    assert tries == [1]
+
+
+def test_with_model_starts_without_the_gen_kwargs(served, calls):
+    RemoteNarrator(served[1], BG, {"num_step": 8}).with_model(DESIGN).generate("a", 1)
+    assert [g["kw"] for g in calls.generates] == [{}]
