@@ -1,4 +1,5 @@
 import glob
+import hashlib
 import json
 import os
 import signal
@@ -8,6 +9,7 @@ import sys
 import tempfile
 import threading
 import time
+import urllib.error
 import urllib.request
 
 import pytest
@@ -167,6 +169,23 @@ def test_handlers_have_a_read_timeout():
     assert 0 < server_mod.Handler.timeout <= 600
 
 
+def test_handlers_have_a_request_deadline():
+    assert 30 <= server_mod.Handler.deadline <= 600
+
+
+def test_a_failed_ref_write_is_a_json_500_and_logged(calls, capsys):
+    data = b"RIFF"
+    sha = hashlib.sha256(data).hexdigest()
+    with serve(BG) as (server, url):
+        server.refs.cleanup()
+        req = urllib.request.Request(f"{url}/refs/{sha}", data=data, method="PUT")
+        with pytest.raises(urllib.error.HTTPError) as e:
+            urllib.request.urlopen(req)
+        assert e.value.code == 500 and "FileNotFoundError" in json.loads(e.value.read())["error"]
+        assert "FileNotFoundError" in capsys.readouterr().err
+        assert urllib.request.urlopen(url + "/info").status == 200
+
+
 @pytest.fixture(autouse=True)
 def keep_sigterm_handler():
     old = signal.getsignal(signal.SIGTERM)      # main() installs its own
@@ -239,8 +258,12 @@ def test_sigterm_stops_the_server_and_removes_the_refs_dir(tmp_path):
             "from book2audio import server; sys.argv = ['book2audio-server', '--port', '0']; server.main()")
     env = {**os.environ, "TMPDIR": str(tmp_path)}
     p = subprocess.Popen([sys.executable, "-c", code], stdout=subprocess.PIPE, text=True, env=env)
-    while "book2audio server on" not in p.stdout.readline():
-        pass
+    deadline = time.time() + 30
+    while True:
+        line = p.stdout.readline()
+        assert line and time.time() < deadline, "the server exited or hung before its banner"
+        if "book2audio server on" in line:
+            break
     assert glob.glob(str(tmp_path / "book2audio-refs-*"))
     p.send_signal(signal.SIGTERM)
     assert p.wait(timeout=10) == 0

@@ -55,7 +55,7 @@ class Handler(BaseHTTPRequestHandler):
     def handle_one_request(self):
         try:
             super().handle_one_request()
-        except OSError:                 # cut off by the deadline, or the client left
+        except ConnectionError:         # cut off by the deadline, or the client left
             self.close_connection = True
 
     def _send(self, status, body=b"", ctype="application/json"):
@@ -104,7 +104,11 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(e.status, str(e))
         if hashlib.sha256(data).hexdigest() != sha:
             return self._error(400, "the SHA-256 of the body does not match the path")
-        self.server.ref_path(sha).write_bytes(data)
+        try:
+            self.server.ref_path(sha).write_bytes(data)
+        except OSError as e:            # disk full, refs dir gone
+            traceback.print_exc()
+            return self._error(500, f"{type(e).__name__}: {e}")
         self._send(204)
 
     def do_POST(self):
