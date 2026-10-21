@@ -1,5 +1,4 @@
 import json
-import os
 import time
 from pathlib import Path
 
@@ -12,7 +11,7 @@ from book2audio.output.m4b import M4bBuilder, need_ffmpeg
 from book2audio.output.render import ChapterRenderer
 from book2audio.text.chunking import Chunker
 from book2audio.text.lexicon import Lexicon
-from book2audio.tts.narrator import Narrator
+from book2audio.tts.narrator import Narrator, set_miopen_env
 from book2audio.tts.voice import DesignedVoice, SampleVoice, VoiceLibrary
 from book2audio.utils import compact_ranges, parse_chapters
 from book2audio.workdir import WorkDir
@@ -60,11 +59,7 @@ class Book2Audio:
         if not selected:
             raise InputError("No chapters selected.")
 
-        if args.device != "cpu":
-            # ROCm/MIOpen: hide harmless warnings and skip the slow per-shape kernel search
-            # (audio chunks all have different lengths). Override by setting these yourself.
-            os.environ.setdefault("MIOPEN_LOG_LEVEL", "3")
-            os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
+        set_miopen_env(args.device)
         narr = Narrator(args.model, args.device, args.threads, gen_kwargs, args.dtype, args.no_miopen)
         voice, voice_key = self._voice().prepare(narr, workdir)
         workdir.save_voice_settings(args)
