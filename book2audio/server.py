@@ -3,8 +3,11 @@ import hashlib
 import io
 import json
 import re
+import signal
+import socket
 import sys
 import tempfile
+import threading
 import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -18,28 +21,68 @@ from book2audio.logging import error, log
 from book2audio.tts.narrator import Narrator, set_miopen_env
 
 SHA256 = re.compile(r"[0-9a-f]{64}")
+MAX_BODY = 200 * 2**20      # bytes; far above any reference WAV, below what could exhaust memory
+
+
+class RequestError(Exception):
+    def __init__(self, status, msg):
+        super().__init__(msg)
+        self.status = status
 
 
 class Handler(BaseHTTPRequestHandler):
     """One request at a time (plain HTTPServer), so seeds and gen_kwargs never interleave."""
 
     timeout = 60    # seconds a socket read may stall; a dead client must not wedge the only thread
+    deadline = 120  # seconds to receive the whole request; a peer trickling bytes must not wedge it either
+
+    def setup(self):
+        super().setup()
+        self._deadline = threading.Timer(self.deadline, self._cut)
+        self._deadline.daemon = True
+        self._deadline.start()
+
+    def _cut(self):
+        try:
+            self.connection.shutdown(socket.SHUT_RDWR)      # wakes the blocked read with EOF
+        except OSError:
+            pass
+
+    def finish(self):
+        self._deadline.cancel()
+        super().finish()
+
+    def handle_one_request(self):
+        try:
+            super().handle_one_request()
+        except OSError:                 # cut off by the deadline, or the client left
+            self.close_connection = True
 
     def _send(self, status, body=b"", ctype="application/json"):
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body)
+        if getattr(self, "command", None) != "HEAD" and status not in (204, 304):
+            self.wfile.write(body)
 
     def _error(self, status, msg):
         self._send(status, json.dumps({"error": msg}).encode())
 
     def _body(self):
-        n = int(self.headers.get("Content-Length") or 0)
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except ValueError as e:
+            raise RequestError(400, f"bad request: {e}")
         if n < 0:
-            raise ValueError("negative Content-Length")
-        return self.rfile.read(n)
+            raise RequestError(400, "bad request: negative Content-Length")
+        if n > MAX_BODY:
+            raise RequestError(413, f"request body over {MAX_BODY} bytes")
+        data = self.rfile.read(n)
+        self._deadline.cancel()         # received in time; generating may take longer
+        if len(data) < n:
+            raise RequestError(400, "bad request: incomplete body")
+        return data
 
     def send_error(self, code, message=None, explain=None):
         """Unsupported methods, bad request lines: JSON like every other error, not an HTML page."""
@@ -57,8 +100,8 @@ class Handler(BaseHTTPRequestHandler):
             return self._error(404, f"unknown path {self.path}")
         try:
             data = self._body()
-        except ValueError as e:
-            return self._error(400, f"bad request: {e}")
+        except RequestError as e:
+            return self._error(e.status, str(e))
         if hashlib.sha256(data).hexdigest() != sha:
             return self._error(400, "the SHA-256 of the body does not match the path")
         self.server.ref_path(sha).write_bytes(data)
@@ -70,6 +113,8 @@ class Handler(BaseHTTPRequestHandler):
         try:
             body = json.loads(self._body())
             model, text, seed = body["model"], body["text"], body["seed"]
+        except RequestError as e:
+            return self._error(e.status, str(e))
         except (ValueError, KeyError, TypeError) as e:
             return self._error(400, f"bad request: {type(e).__name__}: {e}")
         narr = self.server.narrators.get(model)
@@ -138,6 +183,7 @@ def parse_arguments():
 
 def main():
     args = parse_arguments()
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))    # how a service is stopped: still run the cleanup below
     narrators, server = {}, None
     try:
         server = Server((args.host, args.port), narrators)   # bind first: a busy port fails before any model loads
