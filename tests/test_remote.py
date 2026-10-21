@@ -167,10 +167,13 @@ def fake_server(reply=None):
             except OSError:
                 return
             held.append(c)                      # closed at the end, so a silent server stays silent
-            c.recv(65536)
-            if reply is not None:
-                c.sendall(reply)
-                c.shutdown(socket.SHUT_WR)          # FIN, not RST: the request may not be read fully
+            try:
+                c.recv(65536)
+                if reply is not None:
+                    c.sendall(reply)
+                    c.shutdown(socket.SHUT_WR)      # FIN, not RST: the request may not be read fully
+            except OSError:                         # the client or the test already hung up
+                pass
     threading.Thread(target=loop, daemon=True).start()
     try:
         yield f"http://127.0.0.1:{srv.getsockname()[1]}"

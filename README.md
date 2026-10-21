@@ -21,7 +21,7 @@ What it does:
 Two kinds of install:
 
 - **Client only**: reads the book and builds the M4B, and sends narration to a [remote server](#remote-gpu-server). No PyTorch: skip step 1 and run `pip install .`.
-- **Local narration, and the server**: runs the model on this machine. Install PyTorch first (step 1), then `pip install .[local]`.
+- **Local narration, and the server**: runs the model on this machine. Install PyTorch first (step 1), then `pip install ".[local]"`.
 
 Use a virtual environment:
 
@@ -58,8 +58,8 @@ This should print a HIP version and `True`. (`torch.cuda` is the name PyTorch us
 
 ```bash
 pip install .            # client only: the book2audio command, no PyTorch
-pip install .[local]     # local narration and book2audio-server: adds omnivoice (PyTorch first, step 1)
-pip install -e .[local,test]   # or: editable install with omnivoice and pytest, for development
+pip install ".[local]"     # local narration and book2audio-server: adds omnivoice (PyTorch first, step 1)
+pip install -e ".[local,test]"   # or: editable install with omnivoice and pytest, for development
 ```
 
 The dependencies (numpy, soundfile, ebooklib, beautifulsoup4, and omnivoice with `[local]`) are listed in `pyproject.toml` and installed by pip automatically.
@@ -234,7 +234,7 @@ book2audio book.epub --ref narrator.wav --device cuda
 Run OmniVoice on a GPU machine (the *server*) and book2audio anywhere else (the *client*). The client keeps everything it does today (reading the book, chunking, the cache in the work folder, retries, building the M4B); only the narration of each chunk runs on the server. Without `--server` nothing changes.
 
 ```bash
-# on the GPU machine (PyTorch and `pip install .[local]`, see Installation)
+# on the GPU machine (PyTorch and `pip install ".[local]"`, see Installation)
 book2audio-server --device cuda
 
 # on the client (through an SSH tunnel, see Security below)
@@ -394,6 +394,6 @@ tests/                 pytest suite
 The tests need neither the model nor network access:
 
 ```bash
-pip install -e .[test]
+pip install -e ".[test]"
 pytest
 ```

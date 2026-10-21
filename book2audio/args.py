@@ -4,7 +4,10 @@ from book2audio import __version__
 from book2audio.config import DEFAULT_DESIGN_MODEL, DEFAULT_MODEL
 
 
-def parse_arguments() -> argparse.Namespace:
+ENGINE_OPTIONS = ("device", "dtype", "no_miopen", "threads")    # run on the server with --server
+
+
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="book2audio",
         description="EPUB/TXT -> chaptered M4B audiobook with OmniVoice (Bulgarian by default).",
@@ -52,4 +55,8 @@ def parse_arguments() -> argparse.Namespace:
                    help="render the first N chunks of the first selected chapter to preview.wav")
     o.add_argument("--design-only", action="store_true",
                    help="without --ref: only create designed_voice.wav and exit")
-    return ap.parse_args()
+    return ap
+
+
+def parse_arguments() -> argparse.Namespace:
+    return build_parser().parse_args()

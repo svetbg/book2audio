@@ -2,6 +2,7 @@ import json
 import time
 from pathlib import Path
 
+from book2audio.args import ENGINE_OPTIONS, build_parser
 from book2audio.config import CHARS_PER_SEC
 from book2audio.exceptions import InputError
 from book2audio.loaders import for_path
@@ -61,7 +62,8 @@ class Book2Audio:
             raise InputError("No chapters selected.")
 
         if args.server:
-            if (args.device, args.dtype, args.no_miopen, args.threads) != ("cpu", "auto", False, None):
+            defaults = build_parser()
+            if any(getattr(args, o) != defaults.get_default(o) for o in ENGINE_OPTIONS):
                 log("Note: --device/--dtype/--no-miopen/--threads are set on the server, "
                     "ignoring them here.")
             narr = RemoteNarrator(args.server, args.model, gen_kwargs)

@@ -180,3 +180,28 @@ def test_server_run_designs_the_voice_on_the_server_and_ignores_engine_options(
 def test_no_server_no_engine_note(tmp_path, monkeypatch, calls, capsys):
     run(tmp_path, monkeypatch, "--device", "cpu", "--preview", "1")
     assert "set on the server" not in capsys.readouterr().out
+
+
+NOTE = "set on the server, ignoring them here."
+
+
+@pytest.mark.parametrize("opts", [(), ("--device", "cpu", "--dtype", "auto")])
+def test_server_with_default_engine_options_prints_no_note(tmp_path, monkeypatch, calls, capsys, opts):
+    with serve(BASE_MODEL, DESIGN_MODEL) as (server, url):
+        run(tmp_path, monkeypatch, "--server", url, *opts, "--preview", "1")
+    assert NOTE not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("opt", [("--device", "cuda"), ("--dtype", "float32"), ("--no-miopen",),
+                                 ("--threads", "4")])
+def test_server_with_any_engine_option_prints_the_note_once(tmp_path, monkeypatch, calls, capsys, opt):
+    with serve(BASE_MODEL, DESIGN_MODEL) as (server, url):
+        run(tmp_path, monkeypatch, "--server", url, *opt, "--preview", "1")
+    assert capsys.readouterr().out.count(NOTE) == 1
+
+
+def test_gen_kwargs_reach_the_server(tmp_path, monkeypatch, calls):
+    with serve(BASE_MODEL, DESIGN_MODEL) as (server, url):
+        run(tmp_path, monkeypatch, "--server", url, "--gen-kwargs", '{"num_step": 8}', "--preview", "1")
+    assert calls.generates and all(g["kw"].get("num_step") == 8 for g in calls.generates
+                                   if g["text"] != DESIGN_SENTENCE)

@@ -34,7 +34,7 @@ class Narrator:
             from omnivoice import OmniVoice
         except ImportError:
             raise MissingDependency("OmniVoice is not installed. "
-                "Run: pip install .[local]  (or: pip install \"book2audio[local]\")")
+                "Run: pip install \".[local]\"  (or: pip install \"book2audio[local]\")")
 
         if device != "cpu" and not torch.cuda.is_available():
             raise ModelError(f"--device {device} requested, but PyTorch sees no GPU. Is the ROCm build of "
