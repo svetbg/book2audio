@@ -1,7 +1,7 @@
 import argparse
 
 from book2audio import __version__
-from book2audio.config import DEFAULT_MODEL
+from book2audio.config import DEFAULT_DESIGN_MODEL, DEFAULT_MODEL
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -17,7 +17,7 @@ def parse_arguments() -> argparse.Namespace:
     v.add_argument("--ref-text", help="exact transcript of the sample (recommended)")
     v.add_argument("--ref-max-secs", type=float, default=20, help="use at most this much of the sample")
     v.add_argument("--voice", help='without --ref: voice description, e.g. "female, low pitch"')
-    v.add_argument("--design-model", default="k2-fsa/OmniVoice",
+    v.add_argument("--design-model", default=DEFAULT_DESIGN_MODEL,
                    help="model used to design the voice from --voice (the fine-tune then clones it)")
     v.add_argument("--narrator", metavar="NAME", help="use a voice saved earlier with --save-voice")
     v.add_argument("--save-voice", metavar="NAME",
