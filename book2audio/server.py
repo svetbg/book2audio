@@ -36,7 +36,14 @@ class Handler(BaseHTTPRequestHandler):
         self._send(status, json.dumps({"error": msg}).encode())
 
     def _body(self):
-        return self.rfile.read(int(self.headers.get("Content-Length") or 0))
+        n = int(self.headers.get("Content-Length") or 0)
+        if n < 0:
+            raise ValueError("negative Content-Length")
+        return self.rfile.read(n)
+
+    def send_error(self, code, message=None, explain=None):
+        """Unsupported methods, bad request lines: JSON like every other error, not an HTML page."""
+        self._error(code, message or self.responses[code][0])
 
     def do_GET(self):
         if self.path != "/info":
@@ -48,7 +55,10 @@ class Handler(BaseHTTPRequestHandler):
         sha = self.path.removeprefix("/refs/")
         if sha == self.path or not SHA256.fullmatch(sha):
             return self._error(404, f"unknown path {self.path}")
-        data = self._body()
+        try:
+            data = self._body()
+        except ValueError as e:
+            return self._error(400, f"bad request: {e}")
         if hashlib.sha256(data).hexdigest() != sha:
             return self._error(400, "the SHA-256 of the body does not match the path")
         self.server.ref_path(sha).write_bytes(data)

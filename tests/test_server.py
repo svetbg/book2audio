@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import socket
 import sys
@@ -115,3 +116,28 @@ def test_a_stalled_request_does_not_block_the_next_one(monkeypatch, calls):
             stalled.sendall(b"PUT /refs/" + b"0" * 64 + b" HTTP/1.1\r\nContent-Length: 100\r\n\r\nabc")
             with urllib.request.urlopen(url + "/info", timeout=5) as r:       # waits ~0.3 s, not forever
                 assert r.status == 200
+
+
+def raw(server, request):
+    with socket.create_connection(("127.0.0.1", server.server_port), timeout=5) as c:
+        c.sendall(request)
+        c.shutdown(socket.SHUT_WR)
+        data = b""
+        while chunk := c.recv(4096):
+            data += chunk
+    head, _, body = data.partition(b"\r\n\r\n")
+    return int(head.split()[1]), head, json.loads(body)
+
+
+@pytest.mark.parametrize("length", [b"abc", b"-1"])
+def test_put_with_an_invalid_content_length_is_a_400(calls, length):
+    with serve(BG) as (server, url):
+        status, _, body = raw(server, b"PUT /refs/" + b"0" * 64 + b" HTTP/1.1\r\nContent-Length: " + length + b"\r\n\r\n")
+        assert status == 400 and body["error"].startswith("bad request: ")
+        assert urllib.request.urlopen(url + "/info").status == 200
+
+
+def test_unsupported_methods_get_a_json_error(calls):
+    with serve(BG) as (server, url):
+        status, head, body = raw(server, b"DELETE /info HTTP/1.1\r\n\r\n")
+        assert status == 501 and b"application/json" in head and "error" in body
