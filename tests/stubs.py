@@ -49,7 +49,7 @@ def serve(*models):
     from book2audio.server import Server
     from book2audio.tts.narrator import Narrator
     server = Server(("127.0.0.1", 0), {m: Narrator(m) for m in models})
-    threading.Thread(target=server.serve_forever, daemon=True).start()
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
     try:
         yield server, f"http://127.0.0.1:{server.server_port}"
     finally:
