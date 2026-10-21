@@ -23,6 +23,8 @@ SHA256 = re.compile(r"[0-9a-f]{64}")
 class Handler(BaseHTTPRequestHandler):
     """One request at a time (plain HTTPServer), so seeds and gen_kwargs never interleave."""
 
+    timeout = 60    # seconds a socket read may stall; a dead client must not wedge the only thread
+
     def _send(self, status, body=b"", ctype="application/json"):
         self.send_response(status)
         self.send_header("Content-Type", ctype)

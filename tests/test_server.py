@@ -3,11 +3,12 @@ import os
 import socket
 import sys
 import tempfile
+import urllib.request
 
 import pytest
 
 from book2audio import server as server_mod
-from stubs import stub_modules
+from stubs import serve, stub_modules
 
 BG, DESIGN = "preslaff/omnivoice-bg", "k2-fsa/OmniVoice"
 
@@ -105,3 +106,12 @@ def test_a_model_that_fails_to_load_frees_the_port(monkeypatch, calls, capsys):
     assert e.value.code == 1 and "sees no GPU" in capsys.readouterr().err
     with socket.socket() as s:
         s.bind(("127.0.0.1", port))
+
+
+def test_a_stalled_request_does_not_block_the_next_one(monkeypatch, calls):
+    monkeypatch.setattr(server_mod.Handler, "timeout", 0.3)
+    with serve(BG) as (server, url):
+        with socket.create_connection(("127.0.0.1", server.server_port)) as stalled:
+            stalled.sendall(b"PUT /refs/" + b"0" * 64 + b" HTTP/1.1\r\nContent-Length: 100\r\n\r\nabc")
+            with urllib.request.urlopen(url + "/info", timeout=5) as r:       # waits ~0.3 s, not forever
+                assert r.status == 200
