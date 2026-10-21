@@ -87,9 +87,9 @@ class Server(HTTPServer):
     """narrators: {model name: Narrator}, the allowlist. Uploaded references live as long as it does."""
 
     def __init__(self, address, narrators):
-        super().__init__(address, Handler)
         self.narrators = narrators
-        self.refs = tempfile.TemporaryDirectory(prefix="book2audio-refs-")
+        self.refs = tempfile.TemporaryDirectory(prefix="book2audio-refs-")   # before the bind: server_close needs it
+        super().__init__(address, Handler)
 
     def ref_path(self, sha):
         return Path(self.refs.name) / f"{sha}.wav"
@@ -121,15 +121,17 @@ def parse_arguments():
 
 def main():
     args = parse_arguments()
+    narrators, server = {}, None
     try:
+        server = Server((args.host, args.port), narrators)   # bind first: a busy port fails before any model loads
         set_miopen_env(args.device)          # before torch initialises, so before any Narrator
         # ponytail: all models stay loaded at once, as in local voice design. If VRAM runs
         # short, load the design model on demand instead.
-        models = dict.fromkeys(args.model or [DEFAULT_MODEL, DEFAULT_DESIGN_MODEL])
-        narrators = {m: Narrator(m, args.device, args.threads, {}, args.dtype, args.no_miopen)
-                     for m in models}
-        server = Server((args.host, args.port), narrators)
+        for m in dict.fromkeys(args.model or [DEFAULT_MODEL, DEFAULT_DESIGN_MODEL]):
+            narrators[m] = Narrator(m, args.device, args.threads, {}, args.dtype, args.no_miopen)
     except (Book2AudioException, OSError) as e:
+        if server:
+            server.server_close()
         error(f"\nERROR: {e}")
         sys.exit(1)
     log(f"book2audio server on http://{args.host}:{server.server_port} "
