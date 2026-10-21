@@ -102,6 +102,38 @@ book2audio book.epub --ref narrator.wav --ref-text "exact words spoken in the sa
 - `--ref-text` is the **exact** transcript of what is spoken in the sample. It is optional but strongly recommended; without it, cloning is usually worse.
 - `--ref-max-secs` (default 20) is how much of the sample is used. If the sample is longer *and* you pass `--ref-text`, book2audio stops with an error, because the transcript would contain words the model never hears. It prints the pauses it found in the sample, and an ffmpeg command to cut the sample at a pause. Alternatively raise `--ref-max-secs` to cover the whole sample (slower on CPU).
 
+#### Making a sample from an existing recording
+
+A good sample is 10-20 seconds of one narrator, with no music or background noise, cut at pauses between sentences. To take one from an audiobook you already have, and get its transcript:
+
+```bash
+ffmpeg -ss 00:12:31.8 -to 00:12:45.2 -i book.m4b -vn \
+  -af "loudnorm=I=-20:TP=-2" -ac 1 -ar 24000 sample.wav
+```
+
+- `-ss 00:12:31.8` / `-to 00:12:45.2`: start and end of the excerpt (`HH:MM:SS.s`), here 13.4 seconds. Placed before `-i`, they make ffmpeg seek straight to the start instead of decoding everything before it. Pick both points in a pause, so no word is cut in half.
+- `-i book.m4b`: the input; any format ffmpeg reads.
+- `-vn`: drop the video stream (an M4B's cover art is one), keep only audio.
+- `-af "loudnorm=I=-20:TP=-2"`: EBU R128 loudness normalisation to an integrated loudness of -20 LUFS with true peaks at most -2 dBTP, so a quiet or loud recording becomes a sample of even, moderate volume without clipping.
+- `-ac 1 -ar 24000`: mono, 24 kHz, the format OmniVoice works in. book2audio converts `--ref` to this itself, so this only makes `sample.wav` sound exactly as the model will hear it.
+- `sample.wav`: the output file; the `.wav` extension selects uncompressed PCM.
+
+```bash
+pip install openai-whisper
+whisper sample.wav --language bg --model medium
+```
+
+- `pip install openai-whisper`: OpenAI's Whisper speech recognition, installed into the same virtual environment. It uses the PyTorch you already installed, and ffmpeg to read audio.
+- `whisper sample.wav`: transcribes the sample, prints the text with timestamps, and writes it to `sample.txt` (plus `.srt`, `.vtt`, `.tsv`, `.json`) in the current folder.
+- `--language bg`: the audio is Bulgarian; skips language detection, which can guess wrong on a short clip.
+- `--model medium`: the model size (`tiny`, `base`, `small`, `medium`, `large`; bigger is slower and more accurate). `medium` is about 1.5 GB, downloaded once to `~/.cache/whisper/`.
+
+Whisper is not always exact: listen to the sample while reading `sample.txt`, fix any wrong words, and write numbers out as words (see [Troubleshooting](#troubleshooting)). Then use it:
+
+```bash
+book2audio book.epub --ref sample.wav --ref-text "$(cat sample.txt)"
+```
+
 ### 2. Designed voice (no sample)
 
 ```bash
