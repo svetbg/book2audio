@@ -141,3 +141,13 @@ def test_unsupported_methods_get_a_json_error(calls):
     with serve(BG) as (server, url):
         status, head, body = raw(server, b"DELETE /info HTTP/1.1\r\n\r\n")
         assert status == 501 and b"application/json" in head and "error" in body
+
+
+def test_help_shows_the_port_default_once_and_no_none_defaults(monkeypatch, capsys):
+    monkeypatch.setattr(sys, "argv", ["book2audio-server", "--help"])
+    with pytest.raises(SystemExit):
+        server_mod.parse_arguments()
+    out = " ".join(capsys.readouterr().out.split())
+    assert "port to listen on (default: 8765)" in out
+    assert "(default: None)" not in out and out.count("(default: PyTorch") == 0
+    assert "(default: 127.0.0.1)" in out

@@ -111,14 +111,19 @@ class Server(HTTPServer):
         self.refs.cleanup()
 
 
+class Formatter(argparse.ArgumentDefaultsHelpFormatter):
+    def _get_help_string(self, action):
+        return action.help if action.default is None else super()._get_help_string(action)
+
+
 def parse_arguments():
     ap = argparse.ArgumentParser(
         prog="book2audio-server",
         description="Run OmniVoice for book2audio clients (book2audio --server URL). "
                     "No authentication: bind to a trusted network or use an SSH tunnel.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        formatter_class=Formatter)
     ap.add_argument("--host", default="127.0.0.1", help="address to listen on")
-    ap.add_argument("--port", type=int, default=DEFAULT_PORT)
+    ap.add_argument("--port", type=int, default=DEFAULT_PORT, help="port to listen on")
     ap.add_argument("--model", action="append", metavar="M",
                     help=f"model to serve, repeatable; the only ones clients may use "
                          f"(without it: {DEFAULT_MODEL} and {DEFAULT_DESIGN_MODEL})")
@@ -127,7 +132,7 @@ def parse_arguments():
                     help="auto = float32 on CPU, float16 on GPU (try float32 if GPU audio is garbled)")
     ap.add_argument("--no-miopen", action="store_true",
                     help="ROCm: don't use MIOpen (try this if the GPU crashes or hangs)")
-    ap.add_argument("--threads", type=int, help="CPU threads for PyTorch (default: PyTorch decides)")
+    ap.add_argument("--threads", type=int, help="CPU threads for PyTorch (PyTorch decides if not given)")
     return ap.parse_args()
 
 
