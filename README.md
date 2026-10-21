@@ -13,10 +13,15 @@ What it does:
 
 - Python 3.10 or newer
 - [ffmpeg](https://ffmpeg.org/) on the `PATH` (`sudo apt install ffmpeg`)
-- PyTorch, installed separately (see below)
+- PyTorch, installed separately (see below), unless the model runs on a [remote server](#remote-gpu-server)
 - A Hugging Face account that has accepted the conditions of the gated model
 
 ## Installation
+
+Two kinds of install:
+
+- **Client only**: reads the book and builds the M4B, and sends narration to a [remote server](#remote-gpu-server). No PyTorch: skip step 1 and run `pip install .`.
+- **Local narration, and the server**: runs the model on this machine. Install PyTorch first (step 1), then `pip install .[local]`.
 
 Use a virtual environment:
 
@@ -25,9 +30,9 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 1. PyTorch (first, and separately)
+### 1. PyTorch (first, and separately; not needed for a client-only install)
 
-PyTorch is intentionally **not** a dependency of this package: the right build depends on your hardware. Install one of these *before* installing book2audio: omnivoice depends on torch, so installing book2audio first pulls the default multi-GB CUDA build from PyPI.
+PyTorch is intentionally **not** a dependency of this package: the right build depends on your hardware. Install one of these *before* installing book2audio with the `local` extra: omnivoice depends on torch, so installing it first pulls the default multi-GB CUDA build from PyPI.
 
 CPU only:
 
@@ -52,11 +57,14 @@ This should print a HIP version and `True`. (`torch.cuda` is the name PyTorch us
 ### 2. book2audio
 
 ```bash
-pip install .            # installs the book2audio command and its dependencies
-pip install -e .[test]   # or: editable install with pytest, for development
+pip install .            # client only: the book2audio command, no PyTorch
+pip install .[local]     # local narration and book2audio-server: adds omnivoice (PyTorch first, step 1)
+pip install -e .[local,test]   # or: editable install with omnivoice and pytest, for development
 ```
 
-The dependencies (numpy, soundfile, ebooklib, beautifulsoup4, omnivoice) are listed in `pyproject.toml` and installed by pip automatically.
+The dependencies (numpy, soundfile, ebooklib, beautifulsoup4, and omnivoice with `[local]`) are listed in `pyproject.toml` and installed by pip automatically.
+
+**Existing environments keep working.** omnivoice used to be installed with `pip install .`. An environment where it is already installed still has it, and nothing there needs to change. Only a *new* environment needs `.[local]` for local narration; without it, narrating locally stops with "OmniVoice is not installed".
 
 ### 3. Hugging Face access
 
