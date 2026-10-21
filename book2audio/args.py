@@ -25,6 +25,8 @@ def parse_arguments() -> argparse.Namespace:
     v.add_argument("--seed", type=int, default=1234, help="fixed seed for a consistent voice")
     g = ap.add_argument_group("engine")
     g.add_argument("--model", default=DEFAULT_MODEL)
+    g.add_argument("--server", metavar="URL",
+                   help="run the model on a book2audio-server at URL instead of locally")
     g.add_argument("--device", default="cpu", help="cpu, or cuda once ROCm PyTorch is installed")
     g.add_argument("--dtype", default="auto", choices=["auto", "float32", "float16", "bfloat16"],
                    help="auto = float32 on CPU, float16 on GPU (try float32 if GPU audio is garbled)")

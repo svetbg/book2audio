@@ -12,6 +12,7 @@ from book2audio.output.render import ChapterRenderer
 from book2audio.text.chunking import Chunker
 from book2audio.text.lexicon import Lexicon
 from book2audio.tts.narrator import Narrator, set_miopen_env
+from book2audio.tts.remote import RemoteNarrator
 from book2audio.tts.voice import DesignedVoice, SampleVoice, VoiceLibrary
 from book2audio.utils import compact_ranges, parse_chapters
 from book2audio.workdir import WorkDir
@@ -59,8 +60,15 @@ class Book2Audio:
         if not selected:
             raise InputError("No chapters selected.")
 
-        set_miopen_env(args.device)
-        narr = Narrator(args.model, args.device, args.threads, gen_kwargs, args.dtype, args.no_miopen)
+        if args.server:
+            if (args.device, args.dtype, args.no_miopen, args.threads) != ("cpu", "auto", False, None):
+                log("Note: --device/--dtype/--no-miopen/--threads are set on the server, "
+                    "ignoring them here.")
+            narr = RemoteNarrator(args.server, args.model, gen_kwargs)
+        else:
+            set_miopen_env(args.device)
+            narr = Narrator(args.model, args.device, args.threads, gen_kwargs, args.dtype,
+                            args.no_miopen)
         voice, voice_key = self._voice().prepare(narr, workdir)
         workdir.save_voice_settings(args)
         if args.save_voice:
