@@ -1,6 +1,11 @@
-import numpy as np
+import sys
 
+import numpy as np
+import pytest
+
+from book2audio.exceptions import MissingDependency
 from book2audio.tts.narrator import Narrator
+from stubs import stub_modules
 
 SR = 24000
 TEXT = "а" * 130                                   # ~10 s expected
@@ -29,3 +34,10 @@ def test_synth_chunk_keeps_best_after_all_tries():
     a = narr.synth_chunk(TEXT, {}, 5, 2)
     assert narr.seeds == [5, 1005, 2005]
     assert 2.9 < len(a) / SR < 3.2                  # closest to the expected length
+
+
+def test_missing_omnivoice_names_the_quoted_extra(monkeypatch):
+    stub_modules(monkeypatch)
+    monkeypatch.setitem(sys.modules, "omnivoice", None)             # import fails
+    with pytest.raises(MissingDependency, match=r'pip install "\.\[local\]"  \(or: pip install "book2audio\[local\]"\)'):
+        Narrator("m")

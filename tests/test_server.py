@@ -151,3 +151,7 @@ def test_help_shows_the_port_default_once_and_no_none_defaults(monkeypatch, caps
     assert "port to listen on (default: 8765)" in out
     assert "(default: None)" not in out and out.count("(default: PyTorch") == 0
     assert "(default: 127.0.0.1)" in out
+
+
+def test_handlers_have_a_read_timeout():
+    assert 0 < server_mod.Handler.timeout <= 600
