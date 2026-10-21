@@ -1,4 +1,5 @@
 import hashlib
+import http.client
 import io
 import json
 import urllib.error
@@ -24,18 +25,19 @@ class RemoteNarrator(Narrator):
     """A Narrator whose generate() runs on a book2audio-server. Needs neither torch nor omnivoice,
     so it skips Narrator.__init__ and inherits synth_chunk unchanged."""
 
+    _uploaded = set()       # (server url, sha256) of references sent, once per process
+
     def __init__(self, url, model_name, gen_kwargs=None):
         self.url, self.model_name = url.rstrip("/"), model_name
         self.gen_kwargs = gen_kwargs or {}
-        self._uploaded = set()
         try:
-            models = json.loads(self._call("GET", "/info"))["models"]
-        except (ValueError, KeyError, TypeError):
+            models = {n: m["sample_rate"] for n, m in json.loads(self._call("GET", "/info"))["models"].items()}
+        except (ValueError, KeyError, TypeError, AttributeError):
             raise ModelError(f"{self.url} does not look like a book2audio server.")
         if model_name not in models:
             raise ModelError(f"The book2audio server at {self.url} has no model '{model_name}'. "
                              f"It has: {', '.join(models)}")
-        self.sr = models[model_name]["sample_rate"]
+        self.sr = models[model_name]
         log(f"Using book2audio server at {self.url} ({model_name})", flush=True)
 
     def with_model(self, model_name):
@@ -50,17 +52,20 @@ class RemoteNarrator(Narrator):
         except ServerError as e:
             if e.status != 404 or not sha:
                 raise
-            self._uploaded.discard(sha)             # the server forgot it (restarted): send it again
+            self._uploaded.discard((self.url, sha))  # the server forgot it (restarted): send it again
             body["ref"] = self._upload(ref_audio)
             wav = self._call("POST", "/generate", json.dumps(body).encode(), "application/json")
-        return sf.read(io.BytesIO(wav), dtype="float32")[0]
+        try:
+            return sf.read(io.BytesIO(wav), dtype="float32")[0]
+        except sf.SoundFileError as e:
+            raise ModelError(f"The book2audio server at {self.url} did not return audio: {e}")
 
     def _upload(self, path):
         data = Path(path).read_bytes()
         sha = hashlib.sha256(data).hexdigest()
-        if sha not in self._uploaded:
+        if (self.url, sha) not in self._uploaded:
             self._call("PUT", f"/refs/{sha}", data, "audio/wav")
-            self._uploaded.add(sha)
+            self._uploaded.add((self.url, sha))
         return sha
 
     def _call(self, method, path, data=None, ctype=None):
@@ -73,8 +78,12 @@ class RemoteNarrator(Narrator):
             try:
                 msg = json.loads(e.read())["error"]
             except (ValueError, KeyError, TypeError):
-                msg = f"HTTP {e.code} {e.reason}"
+                msg = f"HTTP {e.code} {e.reason} from {req.full_url}"
             raise ServerError(e.code, msg)
+        except http.client.HTTPException as e:
+            raise ModelError(f"Bad response from the book2audio server at {self.url}: {type(e).__name__}: {e}")
         except (urllib.error.URLError, OSError) as e:
+            if type(e) is TimeoutError:             # connected, then no answer
+                raise ModelError(f"Timed out waiting for the book2audio server at {self.url} ({TIMEOUT} s)")
             raise ModelError(f"Cannot reach the book2audio server at {self.url}: "
                              f"{getattr(e, 'reason', e)}")

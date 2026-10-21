@@ -2,8 +2,10 @@ import hashlib
 import json
 import socket
 import sys
+import threading
 import urllib.error
 import urllib.request
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -11,6 +13,7 @@ import pytest
 import soundfile as sf
 
 from book2audio.exceptions import ModelError
+from book2audio.tts import remote
 from book2audio.tts.remote import RemoteNarrator
 from stubs import serve, stub_modules
 
@@ -147,3 +150,91 @@ def test_synth_chunk_retries_with_another_seed(served, calls, monkeypatch):
                         lambda **kw: np.full(int(secs.pop(0) * 24000), 0.3, dtype=np.float32))
     a = RemoteNarrator(served[1], BG).synth_chunk(TEXT, {}, 5, 2)
     assert len(a) > 9 * 24000 and seeds == [5, 1005]
+
+
+@contextmanager
+def fake_server(reply=None):
+    """Answers every request with the raw bytes `reply`, or with silence if None. Yields its URL."""
+    srv = socket.socket()
+    srv.bind(("127.0.0.1", 0))
+    srv.listen()
+    held = []
+
+    def loop():
+        while True:
+            try:
+                c, _ = srv.accept()
+            except OSError:
+                return
+            held.append(c)                      # closed at the end, so a silent server stays silent
+            c.recv(65536)
+            if reply is not None:
+                c.sendall(reply)
+                c.shutdown(socket.SHUT_WR)          # FIN, not RST: the request may not be read fully
+    threading.Thread(target=loop, daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{srv.getsockname()[1]}"
+    finally:
+        srv.close()
+        for c in held:
+            c.close()
+
+
+def http(body, status=b"200 OK", ctype=b"application/json", length=None):
+    n = len(body) if length is None else length
+    return b"HTTP/1.1 " + status + b"\r\nContent-Type: " + ctype + b"\r\nContent-Length: " + \
+        str(n).encode() + b"\r\n\r\n" + body
+
+
+def test_a_truncated_response_is_a_model_error(served):
+    narr = RemoteNarrator(served[1], BG)
+    with fake_server(http(b"abc", length=100)) as url:
+        narr.url = url
+        with pytest.raises(ModelError, match=f"Bad response from the book2audio server at {url}: IncompleteRead"):
+            narr.generate("a", 1)
+
+
+def test_a_200_that_is_not_audio_is_a_model_error(served):
+    narr = RemoteNarrator(served[1], BG)
+    with fake_server(http(b"not a wav file", ctype=b"audio/wav")) as url:
+        narr.url = url
+        with pytest.raises(ModelError, match=f"{url} did not return audio"):
+            narr.generate("a", 1)
+
+
+@pytest.mark.parametrize("info", [b'{"models": ["a"]}', b"[]", b'{"models": {"m": 5}}', b'{"models": {"m": {}}}',
+                                  b"<html>", b'{"version": "1"}'])
+def test_a_malformed_info_is_not_a_book2audio_server(info):
+    with fake_server(http(info)) as url:
+        with pytest.raises(ModelError, match=f"^{url} does not look like a book2audio server.$"):
+            RemoteNarrator(url, "m")
+
+
+def test_a_foreign_server_error_names_the_url():
+    with fake_server(http(b"", status=b"404 File not found", ctype=b"text/html")) as url:
+        with pytest.raises(ModelError, match=f"^HTTP 404 File not found from {url}/info$"):
+            RemoteNarrator(url, BG)
+
+
+def test_a_silent_server_is_a_timeout_not_unreachable(monkeypatch):
+    monkeypatch.setattr(remote, "TIMEOUT", 0.3)
+    with fake_server() as url:
+        with pytest.raises(ModelError, match=f"^Timed out waiting for the book2audio server at {url} "):
+            RemoteNarrator(url, BG)
+
+
+def test_every_request_has_the_timeout(served, monkeypatch):
+    seen, urlopen = [], urllib.request.urlopen
+    monkeypatch.setattr(remote.urllib.request, "urlopen",
+                        lambda req, timeout=None: seen.append(timeout) or urlopen(req, timeout=timeout))
+    RemoteNarrator(served[1], BG).generate("a", 1)
+    assert seen == [remote.TIMEOUT] * 2 and remote.TIMEOUT == 600
+
+
+def test_uploads_are_remembered_across_narrators(served, tmp_path):
+    ref = str(ref_file(tmp_path))
+    RemoteNarrator(served[1], BG).generate("a", 1, ref_audio=ref)
+    [f] = Path(served[0].refs.name).iterdir()
+    mtime = f.stat().st_mtime_ns
+    RemoteNarrator(served[1], DESIGN).generate("a", 1, ref_audio=ref)       # a new narrator, same process
+    assert f.stat().st_mtime_ns == mtime
