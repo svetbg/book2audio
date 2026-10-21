@@ -29,6 +29,7 @@ test = ["pytest"]
 
 [project.scripts]
 book2audio = "book2audio.__main__:main"
+book2audio-server = "book2audio.server:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "book2audio.__init__.__version__"}
