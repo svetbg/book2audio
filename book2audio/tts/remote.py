@@ -84,6 +84,7 @@ class RemoteNarrator(Narrator):
             raise ModelError(f"Bad response from the book2audio server at {self.url}: {type(e).__name__}: {e}")
         except (urllib.error.URLError, OSError) as e:
             if type(e) is TimeoutError:             # connected, then no answer
-                raise ModelError(f"Timed out waiting for the book2audio server at {self.url} ({TIMEOUT} s)")
+                raise ModelError(f"Timed out waiting for the book2audio server at {self.url} ({TIMEOUT} s). "
+                                 f"If it was just started, it may still be loading models.")
             raise ModelError(f"Cannot reach the book2audio server at {self.url}: "
                              f"{getattr(e, 'reason', e)}")

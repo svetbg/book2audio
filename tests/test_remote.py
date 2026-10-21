@@ -222,7 +222,7 @@ def test_a_foreign_server_error_names_the_url():
 def test_a_silent_server_is_a_timeout_not_unreachable(monkeypatch):
     monkeypatch.setattr(remote, "TIMEOUT", 0.3)
     with fake_server() as url:
-        with pytest.raises(ModelError, match=f"^Timed out waiting for the book2audio server at {url} "):
+        with pytest.raises(ModelError, match=f"^Timed out waiting for the book2audio server at {url} .*may still be loading models"):
             RemoteNarrator(url, BG)
 
 
