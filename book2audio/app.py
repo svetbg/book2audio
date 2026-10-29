@@ -1,8 +1,8 @@
 import json
-import os
 import time
 from pathlib import Path
 
+from book2audio.args import ENGINE_OPTIONS, build_parser
 from book2audio.config import CHARS_PER_SEC
 from book2audio.exceptions import InputError
 from book2audio.loaders import for_path
@@ -12,7 +12,8 @@ from book2audio.output.m4b import M4bBuilder, need_ffmpeg
 from book2audio.output.render import ChapterRenderer
 from book2audio.text.chunking import Chunker
 from book2audio.text.lexicon import Lexicon
-from book2audio.tts.narrator import Narrator
+from book2audio.tts.narrator import Narrator, set_miopen_env
+from book2audio.tts.remote import RemoteNarrator
 from book2audio.tts.voice import DesignedVoice, SampleVoice, VoiceLibrary
 from book2audio.utils import compact_ranges, parse_chapters
 from book2audio.workdir import WorkDir
@@ -55,17 +56,21 @@ class Book2Audio:
         workdir.load_voice_settings(args)
         if args.ref and args.voice:
             log("Note: --ref given, ignoring --voice.")
-        chunker = Chunker(args.max_chars, Lexicon.from_file(args.lexicon))
+        chunker = Chunker(args.max_chars, Lexicon.from_file(args.lexicon, args.stress_dict))
         selected = parse_chapters(args.chapters, len(book.chapters))
         if not selected:
             raise InputError("No chapters selected.")
 
-        if args.device != "cpu":
-            # ROCm/MIOpen: hide harmless warnings and skip the slow per-shape kernel search
-            # (audio chunks all have different lengths). Override by setting these yourself.
-            os.environ.setdefault("MIOPEN_LOG_LEVEL", "3")
-            os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
-        narr = Narrator(args.model, args.device, args.threads, gen_kwargs, args.dtype, args.no_miopen)
+        if args.server:
+            defaults = build_parser()
+            if any(getattr(args, o) != defaults.get_default(o) for o in ENGINE_OPTIONS):
+                log("Note: --device/--dtype/--no-miopen/--threads are set on the server, "
+                    "ignoring them here.")
+            narr = RemoteNarrator(args.server, args.model, gen_kwargs)
+        else:
+            set_miopen_env(args.device)
+            narr = Narrator(args.model, args.device, args.threads, gen_kwargs, args.dtype,
+                            args.no_miopen)
         voice, voice_key = self._voice().prepare(narr, workdir)
         workdir.save_voice_settings(args)
         if args.save_voice:

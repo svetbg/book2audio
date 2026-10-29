@@ -13,10 +13,15 @@ What it does:
 
 - Python 3.10 or newer
 - [ffmpeg](https://ffmpeg.org/) on the `PATH` (`sudo apt install ffmpeg`)
-- PyTorch, installed separately (see below)
+- PyTorch, installed separately (see below), unless the model runs on a [remote server](#remote-gpu-server)
 - A Hugging Face account that has accepted the conditions of the gated model
 
 ## Installation
+
+Two kinds of install:
+
+- **Client only**: reads the book and builds the M4B, and sends narration to a [remote server](#remote-gpu-server). No PyTorch: skip step 1 and run `pip install .`.
+- **Local narration, and the server**: runs the model on this machine. Install PyTorch first (step 1), then `pip install ".[local]"`.
 
 Use a virtual environment:
 
@@ -25,9 +30,9 @@ python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-### 1. PyTorch (first, and separately)
+### 1. PyTorch (first, and separately; not needed for a client-only install)
 
-PyTorch is intentionally **not** a dependency of this package: the right build depends on your hardware. Install one of these *before* installing book2audio: omnivoice depends on torch, so installing book2audio first pulls the default multi-GB CUDA build from PyPI.
+PyTorch is intentionally **not** a dependency of this package: the right build depends on your hardware. Install one of these *before* installing book2audio with the `local` extra: omnivoice depends on torch, so installing it first pulls the default multi-GB CUDA build from PyPI.
 
 CPU only:
 
@@ -52,11 +57,14 @@ This should print a HIP version and `True`. (`torch.cuda` is the name PyTorch us
 ### 2. book2audio
 
 ```bash
-pip install .            # installs the book2audio command and its dependencies
-pip install -e .[test]   # or: editable install with pytest, for development
+pip install .            # client only: the book2audio command, no PyTorch
+pip install ".[local]"     # local narration and book2audio-server: adds omnivoice (PyTorch first, step 1)
+pip install -e ".[local,test]"   # or: editable install with omnivoice and pytest, for development
 ```
 
-The dependencies (numpy, soundfile, ebooklib, beautifulsoup4, omnivoice) are listed in `pyproject.toml` and installed by pip automatically.
+The dependencies (numpy, soundfile, ebooklib, beautifulsoup4, and omnivoice with `[local]`) are listed in `pyproject.toml` and installed by pip automatically.
+
+**Existing environments keep working.** omnivoice used to be installed with `pip install .`. An environment where it is already installed still has it, and nothing there needs to change. Only a *new* environment needs `.[local]` for local narration; without it, narrating locally stops with "OmniVoice is not installed".
 
 ### 3. Hugging Face access
 
@@ -194,7 +202,7 @@ What invalidates the cache:
 
 - **Changing the voice** (a different sample, `--ref-text`, `--seed`, `--ref-max-secs`, or a regenerated designed voice) discards the finished chapters made with the previous voice (the message "Voice changed: discarding N chapter(s)" is printed). Chunks are keyed by voice and text, so they are never reused across voices.
 - **`--redo-chapters SPEC`** (e.g. `--redo-chapters 1-6`) deletes those finished chapters so they are regenerated; chunks that are still cached are reused. Delete the `chNNN_chunks/` folder as well to force new audio for the text.
-- Changing the **lexicon** or `--max-chars` changes the text of chunks, so affected chunks are narrated again, but already finished chapters are *not* touched unless you use `--redo-chapters`.
+- Changing the **lexicon**, `--stress-dict` or `--max-chars` changes the text of chunks, so affected chunks are narrated again, but already finished chapters are *not* touched unless you use `--redo-chapters`.
 
 ## Pronunciation lexicon
 
@@ -205,6 +213,18 @@ What invalidates the cache:
 бутона=буто́на
 замък	за́мък
 ```
+
+### Stress dictionary
+
+The model does not work out Bulgarian stress from plain text, so words without a mark are a guess. `--stress-dict FILE` marks the stress of every word found in the dictionary of [bulgarian-accenter](https://github.com/noomorph/bulgarian-accenter) (about 400,000 word forms, MPL-1.1, from БГ Офис and Речко). Download it once:
+
+```bash
+curl -L -o ~/stress-dict.txt https://github.com/noomorph/bulgarian-accenter/releases/download/dictionary/stress-dict.txt
+book2audio book.epub --ref sample.wav --lexicon fixes.txt --stress-dict ~/stress-dict.txt
+```
+
+- `--lexicon` rules run first and win: a word that already has a stress mark (from the lexicon or the book) is left alone.
+- Words with two accepted stresses (`врата`: door / neck) and words not in the dictionary stay unmarked; add them to the lexicon if they come out wrong. One-syllable words are not marked.
 
 ## GPU / ROCm
 
@@ -220,6 +240,31 @@ book2audio book.epub --ref narrator.wav --device cuda
 - With `--device` other than `cpu`, `MIOPEN_LOG_LEVEL=3` (hide harmless warnings) and `MIOPEN_FIND_MODE=FAST` (skip the slow per-shape kernel search; audio chunks all have different lengths) are set automatically, unless you have set them yourself.
 - `--threads N` sets the number of CPU threads for PyTorch.
 - `--gen-kwargs '{"num_step": 16}'` passes extra JSON arguments to OmniVoice's `generate()`.
+
+## Remote GPU server
+
+Run OmniVoice on a GPU machine (the *server*) and book2audio anywhere else (the *client*). The client keeps everything it does today (reading the book, chunking, the cache in the work folder, retries, building the M4B); only the narration of each chunk runs on the server. Without `--server` nothing changes.
+
+```bash
+# on the GPU machine (PyTorch and `pip install ".[local]"`, see Installation)
+book2audio-server --device cuda
+
+# on the client (through an SSH tunnel, see Security below)
+ssh -N -L 8765:localhost:8765 gpu-box &
+book2audio book.epub --ref sample.wav --ref-text "..." --server http://localhost:8765
+```
+
+- The client needs no PyTorch: a plain `pip install .` is enough.
+- `book2audio-server` takes `--host` (default `127.0.0.1`), `--port` (default `8765`), `--device`, `--dtype`, `--no-miopen` and `--threads` (same meaning as for `book2audio`), and `--model M` (repeatable). It loads the models at startup, by default the `--model` and `--design-model` defaults of the client. The models listed are the only ones a client may use; any other is refused, so a client cannot make the server download arbitrary repositories.
+- The client takes host and port from `--server URL`. With a different `--port` on the server, change the URL (and the tunnel) to match.
+- `--device`, `--dtype`, `--no-miopen` and `--threads` belong to the server; given with `--server` they are ignored, with a note.
+- The cache keys and the work folder are the same as for a local run, so you can switch between local narration and `--server` partway through a book and everything already finished is reused.
+- The server handles one request at a time. If the network drops, the run stops with an error, and running it again resumes from the cache.
+- The reference sample is uploaded once per run and kept on the server in a temporary folder until it stops. A server restart loses it, and the client uploads it again by itself.
+
+### Security
+
+The server has **no authentication and no encryption**, and `--gen-kwargs` from a client are passed straight to OmniVoice's `generate()`. It listens on `127.0.0.1` by default, so only the machine itself can reach it. Reach it through an SSH tunnel (`ssh -L`, as above), or use `--host 0.0.0.0` only on a network you trust. Do not expose it to the internet.
 
 ## Output
 
@@ -239,13 +284,15 @@ usage: book2audio [-h] [-v] [-o OUTPUT] [--ref REF] [--ref-text REF_TEXT]
                   [--ref-max-secs REF_MAX_SECS] [--voice VOICE]
                   [--design-model DESIGN_MODEL] [--narrator NAME]
                   [--save-voice NAME] [--seed SEED] [--model MODEL]
-                  [--device DEVICE] [--dtype {auto,float32,float16,bfloat16}]
-                  [--no-miopen] [--threads THREADS] [--gen-kwargs GEN_KWARGS]
+                  [--server URL] [--device DEVICE]
+                  [--dtype {auto,float32,float16,bfloat16}] [--no-miopen]
+                  [--threads THREADS] [--gen-kwargs GEN_KWARGS]
                   [--retries RETRIES] [--chapters CHAPTERS]
                   [--max-chars MAX_CHARS] [--min-chars MIN_CHARS]
                   [--redo-chapters SPEC] [--lexicon LEXICON]
-                  [--bitrate BITRATE] [--workdir WORKDIR] [--keep-chunks]
-                  [--list] [--preview [PREVIEW]] [--design-only]
+                  [--stress-dict FILE] [--bitrate BITRATE] [--workdir WORKDIR]
+                  [--keep-chunks] [--list] [--preview [PREVIEW]]
+                  [--design-only]
                   ebook
 
 EPUB/TXT -> chaptered M4B audiobook with OmniVoice (Bulgarian by default).
@@ -280,6 +327,8 @@ voice:
 
 engine:
   --model MODEL
+  --server URL          run the model on a book2audio-server at URL instead of
+                        locally (default: None)
   --device DEVICE       cpu, or cuda once ROCm PyTorch is installed (default:
                         cpu)
   --dtype {auto,float32,float16,bfloat16}
@@ -305,6 +354,9 @@ text:
                         (default: None)
   --lexicon LEXICON     pronunciation fixes file (word=replacement per line)
                         (default: None)
+  --stress-dict FILE    stress dictionary (bulgarian-accenter stress-
+                        dict.txt): marks the stress of every word it knows;
+                        --lexicon rules win (default: None)
 
 output / modes:
   --bitrate BITRATE     AAC bitrate for the M4B (default: 64k)
@@ -339,13 +391,15 @@ book2audio/
   __main__.py          main(): parses the options, runs Book2Audio, turns errors into exit code 1
   app.py               Book2Audio: wires the pieces below together from the options
   args.py              command-line options
-  config.py            constants (model, sample rate, pauses)
+  config.py            constants (models, port, sample rate, pauses)
   exceptions.py        Book2AudioException and subclasses
   logging.py           log / debug / error (plain print)
   workdir.py           WorkDir: owner of every file name in the work folder
   loaders/             Loader base, EpubLoader, TxtLoader, for_path() picks one by file type
   text/                Lexicon (pronunciation fixes), Chunker (chapter -> speech/pause steps)
-  tts/                 Narrator (OmniVoice wrapper), SampleVoice / DesignedVoice, VoiceLibrary
+  tts/                 Narrator (OmniVoice wrapper), RemoteNarrator (the same over HTTP, remote.py),
+                       SampleVoice / DesignedVoice, VoiceLibrary
+  server.py            book2audio-server: serves Narrators over HTTP for --server
   output/              ChapterRenderer, M4bBuilder, plain audio helpers
   utils.py             small helpers
 tests/                 pytest suite
@@ -356,6 +410,6 @@ tests/                 pytest suite
 The tests need neither the model nor network access:
 
 ```bash
-pip install -e .[test]
+pip install -e ".[test]"
 pytest
 ```

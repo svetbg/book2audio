@@ -13,3 +13,5 @@ DESIGN_SENTENCE = ("Добре дошли. С този глас ще ви про
                    "спокойно, ясно и глава по глава.")
 
 CHARS_PER_SEC = 13.0     # rough narration speed, used for sanity checks / estimates
+DEFAULT_DESIGN_MODEL = "k2-fsa/OmniVoice"   # designs the voice when no sample is given
+DEFAULT_PORT = 8765                         # book2audio-server

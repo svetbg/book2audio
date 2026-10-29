@@ -1,6 +1,8 @@
 import shutil
 import sys
+import threading
 import types
+from contextlib import contextmanager
 from types import SimpleNamespace
 
 import numpy as np
@@ -39,3 +41,17 @@ def stub_modules(monkeypatch, gpu=False):
     monkeypatch.setitem(sys.modules, "torch", torch)
     monkeypatch.setitem(sys.modules, "omnivoice", omni)
     return calls
+
+
+@contextmanager
+def serve(*models):
+    """A book2audio server on a free port, over real Narrators on the stub model (call stub_modules first)."""
+    from book2audio.server import Server
+    from book2audio.tts.narrator import Narrator
+    server = Server(("127.0.0.1", 0), {m: Narrator(m) for m in models})
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
+    try:
+        yield server, f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+        server.server_close()

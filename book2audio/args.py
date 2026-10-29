@@ -1,10 +1,13 @@
 import argparse
 
 from book2audio import __version__
-from book2audio.config import DEFAULT_MODEL
+from book2audio.config import DEFAULT_DESIGN_MODEL, DEFAULT_MODEL
 
 
-def parse_arguments() -> argparse.Namespace:
+ENGINE_OPTIONS = ("device", "dtype", "no_miopen", "threads")    # run on the server with --server
+
+
+def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser(
         prog="book2audio",
         description="EPUB/TXT -> chaptered M4B audiobook with OmniVoice (Bulgarian by default).",
@@ -17,7 +20,7 @@ def parse_arguments() -> argparse.Namespace:
     v.add_argument("--ref-text", help="exact transcript of the sample (recommended)")
     v.add_argument("--ref-max-secs", type=float, default=20, help="use at most this much of the sample")
     v.add_argument("--voice", help='without --ref: voice description, e.g. "female, low pitch"')
-    v.add_argument("--design-model", default="k2-fsa/OmniVoice",
+    v.add_argument("--design-model", default=DEFAULT_DESIGN_MODEL,
                    help="model used to design the voice from --voice (the fine-tune then clones it)")
     v.add_argument("--narrator", metavar="NAME", help="use a voice saved earlier with --save-voice")
     v.add_argument("--save-voice", metavar="NAME",
@@ -25,6 +28,8 @@ def parse_arguments() -> argparse.Namespace:
     v.add_argument("--seed", type=int, default=1234, help="fixed seed for a consistent voice")
     g = ap.add_argument_group("engine")
     g.add_argument("--model", default=DEFAULT_MODEL)
+    g.add_argument("--server", metavar="URL",
+                   help="run the model on a book2audio-server at URL instead of locally")
     g.add_argument("--device", default="cpu", help="cpu, or cuda once ROCm PyTorch is installed")
     g.add_argument("--dtype", default="auto", choices=["auto", "float32", "float16", "bfloat16"],
                    help="auto = float32 on CPU, float16 on GPU (try float32 if GPU audio is garbled)")
@@ -41,6 +46,9 @@ def parse_arguments() -> argparse.Namespace:
     t.add_argument("--redo-chapters", metavar="SPEC",
                    help='regenerate these finished chapters, e.g. "1-6"')
     t.add_argument("--lexicon", help="pronunciation fixes file (word=replacement per line)")
+    t.add_argument("--stress-dict", metavar="FILE",
+                   help="stress dictionary (bulgarian-accenter stress-dict.txt): marks the stress "
+                        "of every word it knows; --lexicon rules win")
     o = ap.add_argument_group("output / modes")
     o.add_argument("--bitrate", default="64k", help="AAC bitrate for the M4B")
     o.add_argument("--workdir", help="cache folder (default: <output>_work)")
@@ -50,4 +58,8 @@ def parse_arguments() -> argparse.Namespace:
                    help="render the first N chunks of the first selected chapter to preview.wav")
     o.add_argument("--design-only", action="store_true",
                    help="without --ref: only create designed_voice.wav and exit")
-    return ap.parse_args()
+    return ap
+
+
+def parse_arguments() -> argparse.Namespace:
+    return build_parser().parse_args()

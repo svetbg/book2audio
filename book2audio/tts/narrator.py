@@ -1,4 +1,5 @@
 import inspect
+import os
 
 import numpy as np
 
@@ -6,6 +7,15 @@ from book2audio.config import DEFAULT_SR
 from book2audio.exceptions import MissingDependency, ModelError
 from book2audio.logging import log
 from book2audio.output.audio import expected_secs, plausible, trim_silence
+
+
+def set_miopen_env(device):
+    """Call before any Narrator is built: torch reads these when it initialises."""
+    if device != "cpu":
+        # ROCm/MIOpen: hide harmless warnings and skip the slow per-shape kernel search
+        # (audio chunks all have different lengths). Override by setting these yourself.
+        os.environ.setdefault("MIOPEN_LOG_LEVEL", "3")
+        os.environ.setdefault("MIOPEN_FIND_MODE", "FAST")
 
 
 class Narrator:
@@ -23,7 +33,8 @@ class Narrator:
         try:
             from omnivoice import OmniVoice
         except ImportError:
-            raise MissingDependency("OmniVoice is not installed. Run: pip install omnivoice")
+            raise MissingDependency("OmniVoice is not installed. "
+                "Run: pip install \".[local]\"  (or: pip install \"book2audio[local]\")")
 
         if device != "cpu" and not torch.cuda.is_available():
             raise ModelError(f"--device {device} requested, but PyTorch sees no GPU. Is the ROCm build of "

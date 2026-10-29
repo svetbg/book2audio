@@ -13,20 +13,23 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 # PyTorch is deliberately not listed: install the CPU or ROCm build yourself first.
+# omnivoice (which needs it) is the optional "local" extra: a --server client does not need it.
 dependencies = [
     "numpy",
     "soundfile",
     "ebooklib",
     "beautifulsoup4",
-    "omnivoice",
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
+# Local narration and book2audio-server; pulls in PyTorch, so install your build first.
+local = ["omnivoice"]
 test = ["pytest"]
 
 [project.scripts]
 book2audio = "book2audio.__main__:main"
+book2audio-server = "book2audio.server:main"
 
 [tool.setuptools.dynamic]
 version = {attr = "book2audio.__init__.__version__"}
