@@ -20,3 +20,15 @@ def test_comments_and_both_separators(tmp_path):
 
 def test_no_path():
     assert Lexicon.from_file(None).rules == []
+
+
+def test_stress_dict(tmp_path):
+    d = tmp_path / "stress-dict.txt"
+    # вятър, вятъра (shares 5 letters), абзац (two stresses: skipped), сън (one vowel: skipped)
+    d.write_text("0вятър:2\n5а;2\n0абзац:1,4\n0сън:2\n", encoding="utf-8")
+    lex_file = tmp_path / "lex.txt"
+    lex_file.write_text("вятъра=вятъра́\n", encoding="utf-8")
+    lex = Lexicon.from_file(str(lex_file), str(d))
+    assert lex.apply("Вятър, вятъра, абзац, сън, вя́тър, Вятърът.") == \
+        "Вя́тър, вятъра́, абзац, сън, вя́тър, Вятърът."   # lexicon wins; marked words kept
+    assert Lexicon.from_file(None, str(d)).apply("вятъра") == "вя́търа"

@@ -32,5 +32,5 @@ def test_argument_defaults(monkeypatch):
         design_model="k2-fsa/OmniVoice", narrator=None, save_voice=None, seed=1234,
         model="preslaff/omnivoice-bg", server=None, device="cpu", dtype="auto", no_miopen=False,
         threads=None, gen_kwargs="{}", retries=2, chapters=None, max_chars=250, min_chars=200,
-        redo_chapters=None, lexicon=None, bitrate="64k", workdir=None, keep_chunks=False,
+        redo_chapters=None, lexicon=None, stress_dict=None, bitrate="64k", workdir=None, keep_chunks=False,
         list=False, preview=None, design_only=False)

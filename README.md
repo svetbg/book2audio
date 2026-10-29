@@ -202,7 +202,7 @@ What invalidates the cache:
 
 - **Changing the voice** (a different sample, `--ref-text`, `--seed`, `--ref-max-secs`, or a regenerated designed voice) discards the finished chapters made with the previous voice (the message "Voice changed: discarding N chapter(s)" is printed). Chunks are keyed by voice and text, so they are never reused across voices.
 - **`--redo-chapters SPEC`** (e.g. `--redo-chapters 1-6`) deletes those finished chapters so they are regenerated; chunks that are still cached are reused. Delete the `chNNN_chunks/` folder as well to force new audio for the text.
-- Changing the **lexicon** or `--max-chars` changes the text of chunks, so affected chunks are narrated again, but already finished chapters are *not* touched unless you use `--redo-chapters`.
+- Changing the **lexicon**, `--stress-dict` or `--max-chars` changes the text of chunks, so affected chunks are narrated again, but already finished chapters are *not* touched unless you use `--redo-chapters`.
 
 ## Pronunciation lexicon
 
@@ -213,6 +213,18 @@ What invalidates the cache:
 бутона=буто́на
 замък	за́мък
 ```
+
+### Stress dictionary
+
+The model does not work out Bulgarian stress from plain text, so words without a mark are a guess. `--stress-dict FILE` marks the stress of every word found in the dictionary of [bulgarian-accenter](https://github.com/noomorph/bulgarian-accenter) (about 400,000 word forms, MPL-1.1, from БГ Офис and Речко). Download it once:
+
+```bash
+curl -L -o ~/stress-dict.txt https://github.com/noomorph/bulgarian-accenter/releases/download/dictionary/stress-dict.txt
+book2audio book.epub --ref sample.wav --lexicon fixes.txt --stress-dict ~/stress-dict.txt
+```
+
+- `--lexicon` rules run first and win: a word that already has a stress mark (from the lexicon or the book) is left alone.
+- Words with two accepted stresses (`врата`: door / neck) and words not in the dictionary stay unmarked; add them to the lexicon if they come out wrong. One-syllable words are not marked.
 
 ## GPU / ROCm
 
@@ -278,8 +290,9 @@ usage: book2audio [-h] [-v] [-o OUTPUT] [--ref REF] [--ref-text REF_TEXT]
                   [--retries RETRIES] [--chapters CHAPTERS]
                   [--max-chars MAX_CHARS] [--min-chars MIN_CHARS]
                   [--redo-chapters SPEC] [--lexicon LEXICON]
-                  [--bitrate BITRATE] [--workdir WORKDIR] [--keep-chunks]
-                  [--list] [--preview [PREVIEW]] [--design-only]
+                  [--stress-dict FILE] [--bitrate BITRATE] [--workdir WORKDIR]
+                  [--keep-chunks] [--list] [--preview [PREVIEW]]
+                  [--design-only]
                   ebook
 
 EPUB/TXT -> chaptered M4B audiobook with OmniVoice (Bulgarian by default).
@@ -341,6 +354,9 @@ text:
                         (default: None)
   --lexicon LEXICON     pronunciation fixes file (word=replacement per line)
                         (default: None)
+  --stress-dict FILE    stress dictionary (bulgarian-accenter stress-
+                        dict.txt): marks the stress of every word it knows;
+                        --lexicon rules win (default: None)
 
 output / modes:
   --bitrate BITRATE     AAC bitrate for the M4B (default: 64k)

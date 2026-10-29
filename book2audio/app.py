@@ -56,7 +56,7 @@ class Book2Audio:
         workdir.load_voice_settings(args)
         if args.ref and args.voice:
             log("Note: --ref given, ignoring --voice.")
-        chunker = Chunker(args.max_chars, Lexicon.from_file(args.lexicon))
+        chunker = Chunker(args.max_chars, Lexicon.from_file(args.lexicon, args.stress_dict))
         selected = parse_chapters(args.chapters, len(book.chapters))
         if not selected:
             raise InputError("No chapters selected.")

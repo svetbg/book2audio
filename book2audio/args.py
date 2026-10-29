@@ -46,6 +46,9 @@ def build_parser() -> argparse.ArgumentParser:
     t.add_argument("--redo-chapters", metavar="SPEC",
                    help='regenerate these finished chapters, e.g. "1-6"')
     t.add_argument("--lexicon", help="pronunciation fixes file (word=replacement per line)")
+    t.add_argument("--stress-dict", metavar="FILE",
+                   help="stress dictionary (bulgarian-accenter stress-dict.txt): marks the stress "
+                        "of every word it knows; --lexicon rules win")
     o = ap.add_argument_group("output / modes")
     o.add_argument("--bitrate", default="64k", help="AAC bitrate for the M4B")
     o.add_argument("--workdir", help="cache folder (default: <output>_work)")
